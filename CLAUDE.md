@@ -5,7 +5,7 @@ and renders her daily trail on Google Maps.
 
 ## Architecture
 
-Three processes on one always-on Linux box (Pi / NAS / old laptop):
+Three processes on one always-on host — currently a **Mac mini** (macOS 15):
 
 ```
 poller.py  ──►  tracks.db  ──►  server.py  ──►  map.html
@@ -27,7 +27,11 @@ Anisette
 - **map.html** — single-page UI. Path / Heatmap / Pings modes, plus a playback
   scrubber that animates a dot along the day's polyline.
 - **Anisette server** — runs as a Docker container (`dadoum/anisette-v3-server`)
-  on the same box. `findmy.py` needs it to talk to Apple.
+  on the same box (Docker Desktop on the Mac mini). `findmy.py` needs it to
+  talk to Apple.
+- **Process supervision** — on the Mac mini this means **launchd**
+  (`~/Library/LaunchAgents/*.plist`), not systemd. The README's systemd unit
+  is alternate-host reference only.
 
 ## Key caveat: macOS 26 AirTag key dump
 
@@ -51,6 +55,17 @@ phone, then hit `http://<pi-tailnet-name>:5000` from anywhere.
 
 Do not port-forward `5000` or stick this behind a public reverse proxy without
 adding auth first. Cat location history is sensitive and the API is wide open.
+
+## Documentation hygiene
+
+**Keep `README.md` in sync with the codebase as work progresses.** Whenever a
+change affects setup, architecture, the host machine, dependencies, run
+commands, or environment variables, update the README in the same change.
+
+The README is the install/run guide; CLAUDE.md is the architectural context.
+When a decision is captured here (host, hosting model, conventions), make sure
+the operational consequence is reflected in the README — and vice versa.
+If they disagree, fix them both before moving on.
 
 ## Conventions
 
