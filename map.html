@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CatchingApril</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --ink: #e9eaee;
+    --muted: #8b8f99;
+    --accent: #ff7a4a;        /* warm orange = the cat's trail */
+    --accent-2: #4ad6ff;
+    --border: #262a33;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+               font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .bar {
+    height: 64px; padding: 0 14px; display: flex; gap: 10px; align-items: center;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    overflow-x: auto; white-space: nowrap;
+  }
+  .bar h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; letter-spacing: .3px; }
+  .bar h1 span { color: var(--accent); }
+  label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+  input[type="datetime-local"], select {
+    background: #11141a; color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; font-size: 13px;
+  }
+  button {
+    background: #11141a; color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer;
+  }
+  button.active { background: var(--accent); color: #1a0f08; border-color: var(--accent); font-weight: 600; }
+  #status { margin-left: auto; color: var(--muted); font-size: 12px; }
+  #map { height: calc(100vh - 64px); width: 100%; position: relative; }
+
+  /* ===== Playback bar (floats over map) ===== */
+  .playback {
+    position: fixed;
+    left: 12px; right: 12px; bottom: 12px;
+    background: rgba(24, 27, 34, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 14px;
+    display: flex; gap: 14px; align-items: center;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+    z-index: 5;
+    transition: opacity .2s, transform .2s;
+  }
+  .playback.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .playback .play {
+    width: 40px; height: 40px; border-radius: 50%; padding: 0; flex-shrink: 0;
+    background: var(--accent); color: #1a0f08; border-color: var(--accent);
+    font-size: 14px; font-weight: 800;
+  }
+  .playback .scrub { flex: 1; min-width: 80px; display: flex; align-items: center; }
+  .playback input[type="range"] {
+    width: 100%; -webkit-appearance: none; appearance: none;
+    height: 6px; border-radius: 3px; background: #2c313b; outline: none; margin: 0;
+    background-image: linear-gradient(var(--accent), var(--accent));
+    background-size: var(--progress, 0%) 100%;
+    background-repeat: no-repeat;
+  }
+  .playback input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--accent); cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .playback input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--accent); cursor: pointer;
+  }
+  .playback .time { font-variant-numeric: tabular-nums; flex-shrink: 0; text-align: right; }
+  .playback .time .ts  { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .playback .time .idx { font-size: 11px; color: var(--muted); display: block; margin-top: 1px; }
+  .playback select.speed {
+    background: #11141a; color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; font-size: 12px; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>🐈 Catching<span>April</span></h1>
+    <label>From <input type="datetime-local" id="start"></label>
+    <label>To   <input type="datetime-local" id="end"></label>
+    <button id="btnPath" class="active">Path</button>
+    <button id="btnHeat">Heatmap</button>
+    <button id="btnPings">Pings</button>
+    <button id="btnReload">↻</button>
+    <span id="status">—</span>
+  </div>
+  <div id="map"></div>
+  <div id="playback" class="playback hidden">
+    <button id="btnPlay" class="play" title="Play / pause">▶</button>
+    <div class="scrub">
+      <input type="range" id="scrubber" min="0" max="0" value="0" step="1">
+    </div>
+    <div class="time">
+      <span class="ts"  id="curTs">—</span>
+      <span class="idx" id="curIdx">0 / 0</span>
+    </div>
+    <select id="speed" class="speed" title="Playback speed">
+      <option value="400">0.5×</option>
+      <option value="200">1×</option>
+      <option value="100" selected>2×</option>
+      <option value="50">4×</option>
+      <option value="25">8×</option>
+      <option value="10">20×</option>
+    </select>
+  </div>
+
+<script>
+  // ===== CONFIG =====
+  // Replace with your Google Maps JS API key (Maps JavaScript API + enable Visualization).
+  const GOOGLE_MAPS_KEY = "YOUR_API_KEY_HERE";
+  // Default centre — 902 Banklick St, Covington KY area
+  const HOME = { lat: 39.0853, lng: -84.5085 };
+
+  let map, polyline, heatmap;
+  let markers = [];
+  let mode = "path";
+
+  // Playback state
+  let currentPath = [];      // array of {lat,lng,ts,acc}
+  let playbackMarker = null; // the animated "cat is here" dot
+  let playTimer = null;      // setInterval id while playing
+  let playIdx = 0;
+
+  function pad(n){ return String(n).padStart(2,"0"); }
+  function toLocalInput(d){
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function fromLocalInput(v){ return new Date(v); }
+
+  function clearOverlays(){
+    if (polyline) polyline.setMap(null);
+    if (heatmap)  heatmap.setMap(null);
+    if (playbackMarker) playbackMarker.setMap(null);
+    markers.forEach(m => m.setMap(null));
+    polyline = heatmap = playbackMarker = null;
+    markers = [];
+    stopPlay();
+  }
+
+  async function load(){
+    const startEl = document.getElementById("start");
+    const endEl   = document.getElementById("end");
+    const start = fromLocalInput(startEl.value).toISOString();
+    const end   = fromLocalInput(endEl.value).toISOString();
+
+    const r = await fetch(`/api/locations?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+    const { points } = await r.json();
+
+    document.getElementById("status").textContent =
+      `${points.length} pings · ${new Date(start).toLocaleString()} → ${new Date(end).toLocaleString()}`;
+
+    clearOverlays();
+    const panel = document.getElementById("playback");
+    if (!points.length) { panel.classList.add("hidden"); return; }
+
+    const path = points.map(p => ({ lat: p.lat, lng: p.lon, ts: p.ts, acc: p.accuracy_m }));
+    currentPath = path;
+
+    if (mode === "path") {
+      polyline = new google.maps.Polyline({
+        path, map,
+        strokeColor: "#ff7a4a", strokeOpacity: 0.95, strokeWeight: 4,
+        icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 2.5,
+                          strokeColor:"#ffd1bd" }, offset: "100%" }],
+      });
+      // Start & end pins
+      markers.push(new google.maps.Marker({
+        position: path[0], map, label: { text:"S", color:"#fff", fontSize:"11px" },
+        title: "Start: " + new Date(path[0].ts).toLocaleString(),
+      }));
+      markers.push(new google.maps.Marker({
+        position: path[path.length-1], map, label: { text:"E", color:"#fff", fontSize:"11px" },
+        title: "End: " + new Date(path[path.length-1].ts).toLocaleString(),
+      }));
+    } else if (mode === "heat") {
+      heatmap = new google.maps.visualization.HeatmapLayer({
+        data: path.map(p => new google.maps.LatLng(p.lat, p.lng)),
+        radius: 28, opacity: 0.75, map,
+      });
+    } else if (mode === "pings") {
+      path.forEach((p, i) => {
+        const dot = new google.maps.Marker({
+          position: p, map,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5,
+                  fillColor: "#ff7a4a", fillOpacity: 0.9, strokeColor:"#1a0f08", strokeWeight:1 },
+          title: `${new Date(p.ts).toLocaleString()}  ±${Math.round(p.acc||0)}m`,
+        });
+        markers.push(dot);
+      });
+    }
+
+    // Fit map to data
+    const bounds = new google.maps.LatLngBounds();
+    path.forEach(p => bounds.extend(p));
+    map.fitBounds(bounds, 60);
+
+    // ===== Playback =====
+    playbackMarker = new google.maps.Marker({
+      position: path[0], map, zIndex: 9999,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 10, fillColor: "#ff7a4a", fillOpacity: 0.95,
+        strokeColor: "#fff", strokeWeight: 3,
+      },
+      title: "Playback",
+    });
+    const scrubber = document.getElementById("scrubber");
+    scrubber.max = String(path.length - 1);
+    panel.classList.remove("hidden");
+    setPlaybackIndex(0);
+  }
+
+  function setPlaybackIndex(i){
+    if (!currentPath.length) return;
+    playIdx = Math.max(0, Math.min(currentPath.length - 1, i|0));
+    const p = currentPath[playIdx];
+    if (playbackMarker) playbackMarker.setPosition({ lat: p.lat, lng: p.lng });
+
+    const scrubber = document.getElementById("scrubber");
+    scrubber.value = String(playIdx);
+    const pct = currentPath.length > 1 ? (playIdx / (currentPath.length - 1)) * 100 : 0;
+    scrubber.style.setProperty("--progress", pct + "%");
+    scrubber.style.backgroundSize = pct + "% 100%";
+
+    document.getElementById("curTs").textContent  = new Date(p.ts).toLocaleString();
+    document.getElementById("curIdx").textContent = `${playIdx + 1} / ${currentPath.length}`;
+  }
+
+  function startPlay(){
+    if (!currentPath.length) return;
+    if (playIdx >= currentPath.length - 1) setPlaybackIndex(0);  // loop from start
+    const ms = parseInt(document.getElementById("speed").value, 10);
+    document.getElementById("btnPlay").textContent = "❚❚";
+    playTimer = setInterval(() => {
+      if (playIdx >= currentPath.length - 1) { stopPlay(); return; }
+      setPlaybackIndex(playIdx + 1);
+    }, ms);
+  }
+
+  function stopPlay(){
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    const btn = document.getElementById("btnPlay");
+    if (btn) btn.textContent = "▶";
+  }
+
+  function togglePlay(){ playTimer ? stopPlay() : startPlay(); }
+
+  function setMode(m){
+    mode = m;
+    for (const id of ["btnPath","btnHeat","btnPings"]) {
+      document.getElementById(id).classList.toggle("active",
+        (id === "btnPath" && m === "path") ||
+        (id === "btnHeat" && m === "heat") ||
+        (id === "btnPings" && m === "pings"));
+    }
+    load();
+  }
+
+  function initMap(){
+    map = new google.maps.Map(document.getElementById("map"), {
+      center: HOME, zoom: 17, mapTypeId: "hybrid",
+      streetViewControl: false, fullscreenControl: false, mapTypeControl: true,
+      // Subtle dark styling on roadmap view; hybrid is satellite + labels by default.
+      styles: [{ elementType: "labels.text.fill", stylers: [{ color: "#e9eaee" }] }],
+    });
+
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24*60*60*1000);
+    document.getElementById("start").value = toLocalInput(yesterday);
+    document.getElementById("end").value   = toLocalInput(now);
+
+    document.getElementById("btnReload").onclick = load;
+    document.getElementById("btnPath").onclick   = () => setMode("path");
+    document.getElementById("btnHeat").onclick   = () => setMode("heat");
+    document.getElementById("btnPings").onclick  = () => setMode("pings");
+
+    // Playback controls
+    document.getElementById("btnPlay").onclick   = togglePlay;
+    document.getElementById("scrubber").oninput  = (e) => {
+      stopPlay();
+      setPlaybackIndex(parseInt(e.target.value, 10));
+    };
+    document.getElementById("speed").onchange = () => {
+      if (playTimer) { stopPlay(); startPlay(); }   // re-arm at new speed
+    };
+    // Keyboard: space = play/pause, arrows = step
+    document.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+      else if (e.code === "ArrowRight") { stopPlay(); setPlaybackIndex(playIdx + 1); }
+      else if (e.code === "ArrowLeft")  { stopPlay(); setPlaybackIndex(playIdx - 1); }
+    });
+
+    load();
+  }
+</script>
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=visualization&callback=initMap"></script>
+</body>
+</html>

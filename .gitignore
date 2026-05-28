@@ -1,0 +1,38 @@
+# --- Secrets & PII (never commit) ---
+.env
+.env.*
+!.env.example
+account.json
+airtag.json
+devices/
+tracks.db
+tracks.db-journal
+tracks.db-wal
+tracks.db-shm
+
+# --- API keys baked into map.html ---
+# map.html ships with "YOUR_API_KEY_HERE" placeholders; if you commit a real
+# key by accident, rotate it. Consider a local-only copy if you edit often.
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Claude Code ---
+# Personal/per-machine settings (permission allowlists, etc.) stay local.
+# Shared team settings live in `.claude/settings.json` and ARE committed.
+.claude/settings.local.json
+.claude/*.local.json
+
+# --- Editor / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
