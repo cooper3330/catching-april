@@ -33,19 +33,53 @@ Anisette
   (`~/Library/LaunchAgents/*.plist`), not systemd. The README's systemd unit
   is alternate-host reference only.
 
-## Key caveat: macOS 26 AirTag key dump
+## Key caveat: AirTag key dump (BeaconStoreKey lockdown)
 
-The one-time `python -m findmy util dump-keys` step **must** be run on a Mac
-that's signed into the Apple ID FindMy.app uses to see the AirTag. On
-**macOS 26 ("Sequoia")** the BeaconStoreKey is locked down even with SIP
-disabled — the dump will fail.
+The one-time `python -m findmy decrypt --out-dir ./devices` step **must** be
+run on a Mac that's signed into the Apple ID FindMy.app uses to see the
+AirTag. Apple has progressively locked down the `BeaconStoreKey` so the
+`security` CLI can no longer read it — findmy's decrypt fails with a
+`ValueError` when this happens.
 
-Workarounds:
-1. Borrow a Mac on **macOS 14 or 15** for the one-time dump, OR
-2. Use the **beaconstorekey-extractor** utility referenced in the FindMy.py docs.
+> The findmy CLI renamed `util dump-keys -o` → `decrypt --out-dir` in 0.10.
+> Both names accomplish the same thing; the new one is what's pinned in
+> `requirements.txt`.
 
-After the dump, copy `devices/<airtag>.json` to the Linux box as `airtag.json`
-next to `poller.py`. The Linux box never needs a Mac after that.
+**Affected OS versions (empirically confirmed or documented):**
+
+- **macOS 15.7.7** (our Mac mini, 2026-05-28) — locked down. `BeaconStore`
+  keychain entry isn't reachable via `security find-generic-password` on
+  either login or System keychain, despite FindMy.app working normally and
+  `~/Library/com.apple.icloud.searchpartyd/OwnedBeacons/` being populated.
+  Apple appears to have backported the protection into recent 15.x point
+  releases.
+- **macOS 26** — fully locked; disabling SIP is not sufficient (per
+  FindMy.py issue #176).
+- **macOS 14 and pre-15.7 15.x** — believed to still work with the standard
+  `findmy decrypt` flow.
+
+**Workarounds, in order of preference:**
+
+1. **Use another Mac on macOS 14 or pre-15.7 15.x** for the one-time dump.
+   This is by far the simplest — no SIP changes, no security tradeoffs on
+   the always-on box.
+2. **`manonstreet/findmy-key-extractor`** on the affected Mac — lldb-based,
+   pure CLI. Requires SIP **and** AMFI disabled (three reboots), but **no
+   Apple Developer ID and no codesigning identity** — once AMFI is off,
+   lldb can attach to `searchpartyuseragent` / `findmylocateagent`,
+   breakpoint on the key-loading calls, and read the key out of registers.
+   See the README "BeaconStoreKey lockdown workaround" section for the
+   full procedure. Output is `LocalStorage.key`; pass it through
+   `findmy.plist.decrypt_plist` to identify April's UUID, then run
+   `FindMy.py/examples/plist_to_json.py` to produce `airtag.json`.
+3. **`pajowu/beaconstorekey-extractor`** — older alternative. Same SIP+AMFI
+   requirements plus a Swift build/sign step (ad-hoc signing is fine, no
+   paid Developer ID needed). The lldb path above avoids the build entirely.
+
+After the dump, copy `devices/<airtag>.json` to the Mac mini as `airtag.json`
+next to `poller.py`. The Mac mini never needs a Mac signed into iCloud after
+that — the poller talks to Apple's servers via Anisette using the dumped
+key.
 
 ## Hosting plan: Tailscale, not public internet
 
