@@ -16,9 +16,15 @@ Anisette
 ```
 
 - **poller.py** — async worker. Loops every `POLL_SECONDS` (default 120s),
-  pulls the last `LOOKBACK_HOURS` of reports from Find My via `findmy.py`,
-  and `INSERT OR IGNORE`s them into `locations`. Caches the Apple session in
-  `account.json` so 2FA only happens once.
+  calls `account.fetch_location_history(airtag)` (findmy 0.10 hard-codes a
+  7-day window — no public knob to narrow it), and `INSERT OR IGNORE`s the
+  reports into `locations`. Repeats across polls are dedupe'd by the
+  `(ts, lat, lon)` UNIQUE constraint, so the wasteful 7-day refetch is
+  functionally fine.
+- **login.py** — one-shot interactive helper. Run once at setup to do the
+  Apple 2FA dance and write `account.json`. The poller then restores that
+  cached session on every restart; 2FA only happens again if Apple
+  invalidates the session.
 - **tracks.db** — SQLite. Single table `locations(id, ts, lat, lon, accuracy_m, status)`
   with a UNIQUE constraint on `(ts, lat, lon)` for dedupe and an index on `ts`.
   Timestamps are ISO 8601 UTC strings.

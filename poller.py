@@ -24,7 +24,7 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
 from pathlib import Path
 
 from findmy import FindMyAccessory
@@ -38,7 +38,9 @@ AIRTAG_JSON    = Path("airtag.json")        # dumped from a Mac, see header
 ACCOUNT_STATE  = Path("account.json")       # cached login (so 2FA only happens once)
 DB_PATH        = Path("tracks.db")
 POLL_SECONDS   = 120                        # ~2 min; AirTag relays update ~1–5 min
-LOOKBACK_HOURS = 6                          # how far back to fetch on each poll
+# Note: findmy 0.10's fetch_location_history hardcodes a 7-day lookback —
+# there's no public API to narrow the window. INSERT OR IGNORE dedupes the
+# repeats, so this is wasteful network-wise but functionally correct.
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
 log = logging.getLogger("catchingapril")
@@ -85,9 +87,7 @@ async def get_account(anisette: RemoteAnisetteProvider) -> AsyncAppleAccount:
 async def poll_once(account: AsyncAppleAccount,
                     airtag: FindMyAccessory,
                     conn: sqlite3.Connection) -> None:
-    end   = datetime.now(timezone.utc)
-    start = end - timedelta(hours=LOOKBACK_HOURS)
-    reports = await account.fetch_last_reports(airtag, start, end)
+    reports = await account.fetch_location_history(airtag)
 
     inserted = 0
     for r in reports:
@@ -119,7 +119,9 @@ async def main() -> None:
     with AIRTAG_JSON.open("r") as f:
         airtag = FindMyAccessory.from_json(json.load(f))
 
-    log.info("Poller started for AirTag: %s", getattr(airtag, "name", "(unnamed)"))
+    # In findmy 0.10 the name attr exists but is often None on dumped tags;
+    # fall back to "(unnamed)" so the log line stays readable.
+    log.info("Poller started for AirTag: %s", getattr(airtag, "name", None) or "(unnamed)")
     while True:
         try:
             await poll_once(account, airtag, conn)
