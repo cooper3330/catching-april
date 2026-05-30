@@ -63,27 +63,23 @@ def init_db() -> sqlite3.Connection:
 
 
 async def get_account(anisette: RemoteAnisetteProvider) -> AsyncAppleAccount:
-    """Restore cached session or log in fresh (2FA prompt on first run)."""
-    if ACCOUNT_STATE.exists():
-        log.info("Restoring cached Apple account session…")
-        acct = AsyncAppleAccount.restore(
-            json.loads(ACCOUNT_STATE.read_text()), anisette
+    """Restore cached Apple session written by `login.py`.
+
+    First-time 2FA is handled by `login.py` (a separate one-shot script) so
+    this daemon never needs to do interactive prompts. In findmy 0.10,
+    `from_json` reads the anisette provider config from the saved state, so
+    the `anisette` arg here is unused on the restore path — kept on the
+    signature for symmetry with `main()`.
+    """
+    if not ACCOUNT_STATE.exists():
+        raise SystemExit(
+            f"Missing {ACCOUNT_STATE} — run `python login.py` once to do the "
+            "one-time 2FA login, then re-run poller.py."
         )
-        return acct
 
-    log.info("First-time login — you may be prompted for a 2FA code.")
-    acct = AsyncAppleAccount(anisette)
-    await acct.login(APPLE_EMAIL, APPLE_PASSWORD)
-
-    # If 2FA is required, FindMy.py will raise; uncomment & adapt as needed:
-    #   methods = await acct.get_2fa_methods()
-    #   await methods[0].request()
-    #   code = input("2FA code: ").strip()
-    #   await methods[0].submit(code)
-
-    ACCOUNT_STATE.write_text(json.dumps(acct.export()))
-    log.info("Saved session to %s", ACCOUNT_STATE)
-    return acct
+    log.info("Restoring cached Apple account session from %s…", ACCOUNT_STATE)
+    del anisette  # unused on the restore path; provider comes from the JSON
+    return AsyncAppleAccount.from_json(ACCOUNT_STATE)
 
 
 async def poll_once(account: AsyncAppleAccount,

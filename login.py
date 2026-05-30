@@ -16,7 +16,6 @@ Prereqs:
     - Access to a trusted device or phone to receive the 6-digit code.
 """
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
@@ -69,14 +68,17 @@ async def main() -> int:
         state = await method.submit(code)
         print(f"  after 2FA submit, state: {state.name}")
 
-    if state not in (LoginState.AUTHENTICATED, LoginState.LOGGED_IN):
-        print(f"Login did not complete; final state: {state.name}", file=sys.stderr)
-        return 1
+    try:
+        if state not in (LoginState.AUTHENTICATED, LoginState.LOGGED_IN):
+            print(f"Login did not complete; final state: {state.name}", file=sys.stderr)
+            return 1
 
-    ACCOUNT_STATE.write_text(json.dumps(acct.export()))
-    print(f"\nSaved session to {ACCOUNT_STATE}")
-    print("Next: `python poller.py` to start the polling loop.")
-    return 0
+        acct.to_json(ACCOUNT_STATE)
+        print(f"\nSaved session to {ACCOUNT_STATE}")
+        print("Next: `python poller.py` to start the polling loop.")
+        return 0
+    finally:
+        await acct.close()
 
 
 if __name__ == "__main__":
