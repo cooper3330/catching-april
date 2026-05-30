@@ -22,7 +22,7 @@ from flask import Flask, jsonify, render_template, request
 DB_PATH          = Path("tracks.db")
 APP_DIR          = Path(__file__).parent
 PORT             = int(os.environ.get("PORT", "5001"))
-GOOGLE_MAPS_KEY  = os.environ.get("GOOGLE_MAPS_KEY", "")
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 app = Flask(__name__)
 
@@ -41,7 +41,7 @@ def query(start_iso: str, end_iso: str):
 
 @app.route("/")
 def index():
-    return render_template("map.html", google_maps_key=GOOGLE_MAPS_KEY)
+    return render_template("map.html", google_maps_key=GOOGLE_MAPS_API_KEY)
 
 
 @app.route("/api/locations")

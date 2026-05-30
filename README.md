@@ -400,12 +400,12 @@ Set your Google Maps JS API key in `.env`:
 
 ```bash
 # In .env
-GOOGLE_MAPS_KEY=AIza...
+GOOGLE_MAPS_API_KEY=AIza...
 ```
 
 Get the key from https://console.cloud.google.com/ (enable **Maps JavaScript
 API**, restrict by HTTP referrer to `http://localhost:5001/*` and your
-Tailscale hostname). `server.py` reads `GOOGLE_MAPS_KEY` at startup and
+Tailscale hostname). `server.py` reads `GOOGLE_MAPS_API_KEY` at startup and
 renders `templates/map.html` via Jinja, injecting the key in both spots
 (the `GOOGLE_MAPS_KEY` JS constant and the `<script src=…>` URL).
 

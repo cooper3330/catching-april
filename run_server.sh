@@ -1,6 +1,6 @@
 #!/bin/bash
 # Wrapper that sources .env and launches server.py.
-# Used by the launchd LaunchAgent so secrets (GOOGLE_MAPS_KEY) stay in .env
+# Used by the launchd LaunchAgent so secrets (GOOGLE_MAPS_API_KEY) stay in .env
 # rather than being baked into ~/Library/LaunchAgents/*.plist.
 set -euo pipefail
 

@@ -29,7 +29,7 @@ Anisette
   with a UNIQUE constraint on `(ts, lat, lon)` for dedupe and an index on `ts`.
   Timestamps are ISO 8601 UTC strings.
 - **server.py** — Flask. Renders `templates/map.html` at `/` (Jinja-injecting
-  the Google Maps key from `GOOGLE_MAPS_KEY` env var), exposes
+  the Google Maps key from `GOOGLE_MAPS_API_KEY` env var), exposes
   `/api/locations?start=&end=` (defaults to last 24h) and `/api/days`.
   Read-only; no auth, no writes. Started via `run_server.sh`, which sources
   `.env` so the LaunchAgent doesn't need secrets baked into its plist.
@@ -156,9 +156,9 @@ If they disagree, fix them both before moving on.
 - Dark theme via CSS custom properties on `:root`; the cat's trail is
   `--accent: #ff7a4a` (warm orange) everywhere.
 - Google Maps JS API with the `visualization` library (for the heatmap).
-  The key is injected by `server.py` from the `GOOGLE_MAPS_KEY` env var into
-  two `{{ google_maps_key }}` placeholders in `templates/map.html` (the
-  `GOOGLE_MAPS_KEY` constant and the `<script src=…>` URL). Adding a new
+  The key is injected by `server.py` from the `GOOGLE_MAPS_API_KEY` env var
+  into two `{{ google_maps_key }}` placeholders in `templates/map.html` (the
+  `GOOGLE_MAPS_KEY` JS constant and the `<script src=…>` URL). Adding a new
   spot? Put `{{ google_maps_key }}` there too.
 
 **Data & privacy**
