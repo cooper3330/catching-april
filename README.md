@@ -288,12 +288,26 @@ session-bound. You only need to redo this if you re-pair the AirTag.
 
 ## 3. Anisette server (one-liner)
 
-Runs in Docker on the host. On the Mac mini, install **Docker Desktop** first.
+Runs in Docker on the host. On the Mac mini we use **Colima** as a
+lighter alternative to Docker Desktop:
+
+```bash
+brew install colima docker
+brew services start colima                   # auto-starts at login
+```
+
+Then run the Anisette container; `--restart always` brings it back when
+Colima restarts:
 
 ```bash
 docker run -d --restart always --name anisette \
   -p 6969:6969 dadoum/anisette-v3-server
 ```
+
+> Migrating from Docker Desktop? Uninstall it first
+> (`sudo /Applications/Docker.app/Contents/MacOS/uninstall`) and clean
+> `~/.docker/config.json` of the `credsStore: "desktop"` line — it points
+> at a binary that's gone with Docker Desktop and breaks `docker pull`.
 
 ## 4. Configure credentials and do the one-time login
 
@@ -307,26 +321,53 @@ python login.py                      # interactive 2FA, caches account.json
 and writes `account.json` next to it. `poller.py` then restores that
 session on every start — no further 2FA needed unless Apple invalidates it.
 
-## 5. Run the poller
+## 5. Run the poller (one-off check)
 
 ```bash
-set -a; source .env; set +a          # if not already exported
 python poller.py
 ```
 
-Writes to `tracks.db` every 2 minutes (`POLL_SECONDS`).
+Writes to `tracks.db` on every poll (every 2 min, `POLL_SECONDS`).
+Stop with `Ctrl+C`.
 
-Leave it running.
+For production, install the LaunchAgents — see §6.
 
-### Run it as a service
+### When Apple invalidates the session
 
-**Mac mini (launchd)** — the default. A `LaunchAgent` plist will live at
-`~/Library/LaunchAgents/com.catchingapril.poller.plist`; see [the launchd
-section below](#launchd-plist-mac-mini) once we add the actual file to the
-repo.
+The cached session in `account.json` is good until Apple decides
+otherwise (days to weeks). When the poller's log shows:
 
-**Linux (systemd)** — alternate host reference, kept here in case the project
-later moves to a Pi/NAS:
+```
+Got 401 while fetching reports, redoing login
+Detected 2FA requirement: trustedDeviceSecondaryAuth
+Poll cycle failed: Unexpected login state after reauth: LoginState.REQUIRE_2FA. Please log in again.
+```
+
+…the session expired. Re-run `login.py` to do a fresh 2FA dance; the
+LaunchAgent-managed poller will pick up the new `account.json` on its
+next cycle automatically (no need to restart anything).
+
+## 6. Run it as a service
+
+### Mac mini (launchd, default)
+
+Two LaunchAgents in `launchd/` start the poller and server at login
+and auto-restart them if they crash:
+
+```bash
+./launchd/install.sh                 # installs to ~/Library/LaunchAgents/
+launchctl list | grep catchingapril  # both labels should appear
+tail -f ~/Library/Logs/catchingapril-poller.log
+tail -f ~/Library/Logs/catchingapril-server.log
+```
+
+Uninstall with `./launchd/uninstall.sh`. For boot-without-login
+behaviour, enable auto-login for your user in **System Settings →
+Users & Groups → Automatic login**.
+
+### Linux (systemd) — alternate host reference
+
+Kept here in case the project later moves to a Pi/NAS:
 
 ```ini
 # /etc/systemd/system/catchingapril.service
@@ -353,13 +394,17 @@ sudo systemctl enable --now catchingapril
 journalctl -u catchingapril -f
 ```
 
-## 6. Run the web app
+## 7. Run the web app
 
 ```bash
 python server.py
-# open http://localhost:5000 on the Mac mini
-# or http://<mac-mini-tailnet-name>:5000 from your phone over Tailscale
+# open http://localhost:5001 on the Mac mini
+# or http://<mac-mini-tailnet-name>:5001 from your phone over Tailscale
 ```
+
+> Port defaults to **5001** because macOS uses :5000 for AirPlay Receiver.
+> Override with `PORT=8080 python server.py` if you'd rather use something
+> else. The LaunchAgent in `launchd/` doesn't set PORT, so it uses 5001.
 
 The Flask app has **no authentication** and shouldn't be exposed to the public
 internet. Hosting plan is **Tailscale only** — install the tailnet on the Mac
@@ -369,7 +414,7 @@ port-forward `5000`.
 Paste your Google Maps key into `map.html` (two places: the `GOOGLE_MAPS_KEY` constant
 **and** the `<script src=…>` URL near the bottom).
 
-## 7. Cat-specific notes
+## 8. Cat-specific notes
 
 - **Breakaway collar only.** Non-negotiable for outdoor cats.
 - The AirTag updates only when a passing iPhone reports it — expect 1–5 min gaps in busy
@@ -379,7 +424,7 @@ Paste your Google Maps key into `map.html` (two places: the `GOOGLE_MAPS_KEY` co
   iPhones with an "AirTag found moving with you" alert. Neighbors may see it.
 - Battery (CR2032) lasts ~12 months. Drop a Calendar reminder.
 
-## 8. Where to grow this
+## 9. Where to grow this
 
 - **Geofence alerts**: trigger a push notification (e.g. via ntfy.sh) when she crosses
   outside a polygon around the yard.

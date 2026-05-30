@@ -6,8 +6,13 @@ Pair with poller.py writing into the same tracks.db.
 
     pip install flask
     python server.py
-    # → open http://localhost:5000/
+    # → open http://localhost:5001/
+
+Port defaults to 5001 because macOS uses :5000 for AirPlay Receiver out
+of the box (`Address already in use`). Override with the PORT env var:
+    PORT=8080 python server.py
 """
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -16,6 +21,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 DB_PATH = Path("tracks.db")
 APP_DIR = Path(__file__).parent
+PORT    = int(os.environ.get("PORT", "5001"))
 
 app = Flask(__name__)
 
@@ -62,6 +68,6 @@ def days():
 
 
 if __name__ == "__main__":
-    # 0.0.0.0 so you can view from your phone on the home network.
+    # 0.0.0.0 so you can view from your phone over Tailscale.
     # Keep this OFF the public internet — there's no auth on the data.
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=PORT, debug=False)

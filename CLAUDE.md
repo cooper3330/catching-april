@@ -33,11 +33,19 @@ Anisette
 - **map.html** — single-page UI. Path / Heatmap / Pings modes, plus a playback
   scrubber that animates a dot along the day's polyline.
 - **Anisette server** — runs as a Docker container (`dadoum/anisette-v3-server`)
-  on the same box (Docker Desktop on the Mac mini). `findmy.py` needs it to
-  talk to Apple.
-- **Process supervision** — on the Mac mini this means **launchd**
-  (`~/Library/LaunchAgents/*.plist`), not systemd. The README's systemd unit
-  is alternate-host reference only.
+  on the same box. `findmy.py` needs it to talk to Apple. We use **Colima**
+  (not Docker Desktop) as the Docker runtime — lighter, no GUI required,
+  better fit for a Mac mini acting as a server. Anisette has `--restart
+  always` so it comes back whenever Colima does.
+- **Process supervision** — **launchd** LaunchAgents (`~/Library/LaunchAgents/`)
+  manage the poller, the server, and Colima. Templates live in `launchd/`
+  in this repo; `launchd/install.sh` substitutes the user's `$HOME` into
+  `__USER_HOME__` placeholders and loads them. LaunchAgents run at user
+  login, so the Mac mini should have **automatic login** enabled for
+  unattended boot recovery. The README's systemd unit is alternate-host
+  reference only.
+- **Web server port** — Flask binds **5001** by default (not 5000), because
+  macOS 12+ uses :5000 for AirPlay Receiver. Override with `PORT` env var.
 
 ## Key caveat: AirTag key dump (BeaconStoreKey lockdown)
 

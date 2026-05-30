@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CatchingApril poller — runs at login, restarts on crash.
+
+  Install via launchd/install.sh, which substitutes __USER_HOME__ with $HOME
+  and copies the result to ~/Library/LaunchAgents/.
+
+  Logs land in ~/Library/Logs/catchingapril-poller.log.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.catchingapril.poller</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__USER_HOME__/dev/catching-april/.venv/bin/python</string>
+    <string>__USER_HOME__/dev/catching-april/poller.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__USER_HOME__/dev/catching-april</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Throttle restart loop if it crashes immediately (default is 10s). -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>__USER_HOME__/Library/Logs/catchingapril-poller.log</string>
+  <key>StandardErrorPath</key>
+  <string>__USER_HOME__/Library/Logs/catchingapril-poller.log</string>
+
+  <!--
+    No EnvironmentVariables needed: the poller only reads ANISETTE_URL
+    (defaults to localhost:6969) and reads the cached Apple session from
+    account.json. APPLE_EMAIL/PASSWORD are only used by login.py.
+  -->
+</dict>
+</plist>
