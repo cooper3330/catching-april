@@ -63,18 +63,32 @@ AirTag. Apple has progressively locked down the `BeaconStoreKey` so the
 1. **Use another Mac on macOS 14 or pre-15.7 15.x** for the one-time dump.
    This is by far the simplest — no SIP changes, no security tradeoffs on
    the always-on box.
-2. **`manonstreet/findmy-key-extractor`** on the affected Mac — lldb-based,
-   pure CLI. Requires SIP **and** AMFI disabled (three reboots), but **no
-   Apple Developer ID and no codesigning identity** — once AMFI is off,
-   lldb can attach to `searchpartyuseragent` / `findmylocateagent`,
-   breakpoint on the key-loading calls, and read the key out of registers.
-   See the README "BeaconStoreKey lockdown workaround" section for the
-   full procedure. Output is `LocalStorage.key`; pass it through
-   `findmy.plist.decrypt_plist` to identify April's UUID, then run
-   `FindMy.py/examples/plist_to_json.py` to produce `airtag.json`.
-3. **`pajowu/beaconstorekey-extractor`** — older alternative. Same SIP+AMFI
-   requirements plus a Swift build/sign step (ad-hoc signing is fine, no
-   paid Developer ID needed). The lldb path above avoids the build entirely.
+2. **Patched `pajowu/beaconstorekey-extractor`** on the affected Mac —
+   purpose-built for this. A small Swift binary that claims the searchparty
+   keychain-access-group entitlement and reads the `BeaconStore` keychain
+   item via `SecItemCopyMatching`. Requires SIP **and** AMFI disabled
+   (three reboots) but **no Apple Developer ID** — override the Makefile
+   with `make run DEVELOPER_ID=-` to use ad-hoc signing, which AMFI-off
+   permits. Ships `make decrypt` to decrypt every `OwnedBeacons/*.record`
+   in one pass.
+
+   **One-line patch required on 15.7+:** add
+   `kSecAttrSynchronizable: kSecAttrSynchronizableAny` to the
+   `SecItemCopyMatching` query, because the `BeaconStore` keychain item
+   has moved to the **iCloud keychain** (synchronizable) on Sequoia
+   point releases — the default query only returns local items and
+   returns `errSecItemNotFound` otherwise. The README's "BeaconStoreKey
+   lockdown workaround" section has the exact `sed` command and the
+   full procedure.
+
+> **Wrong-tool footnote (learned the hard way 2026-05-30):**
+> `manonstreet/findmy-key-extractor` looks like the right tool but
+> isn't — it only extracts `LocalStorage.key` (the SQLite key for
+> `findmylocateagent`'s DB) and the FMIP/FMF service keys. It hooks
+> `SecItemCopyMatching` inside `FindMy.app` and filters by `svce`
+> attribute, but the `BeaconStore` read happens inside
+> `searchpartyuseragent`, not `FindMy.app`. Using `LocalStorage.key` to
+> decrypt `OwnedBeacons/*.record` fails with `cryptography.exceptions.InvalidTag`.
 
 After the dump, copy `devices/<airtag>.json` to the Mac mini as `airtag.json`
 next to `poller.py`. The Mac mini never needs a Mac signed into iCloud after

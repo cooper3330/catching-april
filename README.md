@@ -80,19 +80,37 @@ isn't reachable on that Mac. Two options:
 1. **Easier:** find another Mac on macOS 14 or pre-15.7 15.x and run the
    dump there. No security changes needed; you only need the resulting
    `airtag.json` back on the Mac mini.
-2. **Harder (no other Mac available):** use the lldb-based extractor
-   below. Requires temporarily disabling SIP **and** AMFI on the affected
-   Mac. **No Apple Developer ID, no codesigning identity needed** — ad-hoc
-   debugger attach is sufficient once AMFI is off.
+2. **Harder (no other Mac available):** build and run a patched
+   `pajowu/beaconstorekey-extractor` below. Requires temporarily disabling
+   SIP **and** AMFI on the affected Mac, plus a **one-line patch** to make
+   it search the iCloud keychain (where Sequoia stores the item) instead
+   of the local one. **No Apple Developer ID** — ad-hoc codesigning
+   (`DEVELOPER_ID=-`) is sufficient once AMFI is off.
 
-> The older [`pajowu/beaconstorekey-extractor`][bske] tool still works but
-> requires building and signing a Swift binary that claims the
-> `com.apple.icloud.searchpartyuseragent` entitlement. The lldb path
-> below avoids that entirely.
+> **Why the patch:** on macOS 15.7+, `BeaconStore` lives in the **iCloud
+> keychain** (synced), not the local keychain. By default
+> `SecItemCopyMatching` only returns non-synchronizable items, so upstream
+> pajowu's query returns `errSecItemNotFound` even with the entitlement
+> and AMFI off. You can verify by opening Keychain Access and searching
+> for `beacon` — the `BeaconStore` entry shows under "iCloud", not
+> "login". Adding `kSecAttrSynchronizable: kSecAttrSynchronizableAny` to
+> pajowu's query fixes this; the patch is in step 4.
+
+> **Tool choice (learned the hard way):** the obvious-looking
+> [`manonstreet/findmy-key-extractor`][mks] is **not** the right tool —
+> it extracts `LocalStorage.key`, `FMIPDataManager.bplist`, and
+> `FMFDataManager.bplist` (Find My iPhone / Friends keys), and skips the
+> `BeaconStoreKey` entirely. Trying to decrypt `OwnedBeacons/*.record`
+> with `LocalStorage.key` fails with
+> `cryptography.exceptions.InvalidTag`. Use
+> [`pajowu/beaconstorekey-extractor`][bske] instead — it specifically
+> reads the `BeaconStore` keychain item via the searchparty keychain
+> access group.
 
 [bske]: https://github.com/pajowu/beaconstorekey-extractor
+[mks]: https://github.com/manonstreet/findmy-key-extractor
 
-#### Full lldb extraction procedure (Apple Silicon Mac)
+#### Full extraction procedure (Apple Silicon Mac)
 
 Risk callouts before you start:
 
@@ -129,58 +147,87 @@ csrutil status                                          # "disabled"
 nvram boot-args                                         # "amfi_get_out_of_my_way=1"
 ```
 
-**4. Extract the keys:**
+**4. Build and run the BeaconStoreKey extractor.**
 
 ```bash
-xcode-select --install 2>/dev/null                      # only if `xcrun` missing
-git clone https://github.com/manonstreet/findmy-key-extractor ~/findmy-key-extractor
-cd ~/findmy-key-extractor
-pip3 install -r requirements.txt
-./extract.sh
-ls keys/                                                # LocalStorage.key + bplists
+xcode-select -p 2>/dev/null || xcode-select --install   # CLT must be present
+cd ~/dev
+git clone https://github.com/pajowu/beaconstorekey-extractor
+cd beaconstorekey-extractor
 ```
 
-If `./extract.sh` fails to attach, open FindMy.app once to wake
-`searchpartyuseragent` / `findmylocateagent` and try again.
+**Apply the iCloud-keychain patch.** The upstream query only searches local
+keychain items. Add `kSecAttrSynchronizable: kSecAttrSynchronizableAny`
+to `beaconstorekey-extractor.swift` so it also searches iCloud-synced items:
 
-**5. Identify April's UUID using the extracted key.** Names inside the
-owned-beacon records are encrypted, so this can only be done *after*
-key extraction. From the project venv:
+```bash
+# In-place patch — add the synchronizable line after kSecAttrService:
+/usr/bin/sed -i '' '/kSecAttrService as String: "BeaconStore",/a\
+                            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+' beaconstorekey-extractor.swift
+
+grep kSecAttrSynchronizable beaconstorekey-extractor.swift    # confirm patch landed
+```
+
+Then build, ad-hoc sign, and run:
+
+```bash
+# Ad-hoc signing (no Apple Developer ID needed when AMFI is off):
+make run DEVELOPER_ID=-
+```
+
+The Swift binary calls `SecItemCopyMatching` for the `BeaconStore`
+keychain item using the searchparty keychain-access-group entitlement.
+Output ends with:
+
+```
+Found key in keychain:
+<64 hex characters>            ← the BeaconStoreKey
+```
+
+Save the hex string to a file you'll reuse:
+
+```bash
+echo "<paste-the-hex>" > /tmp/bsk.hex
+```
+
+**5. Decrypt all owned beacons and identify April.** The extractor
+ships `searchpartyd-decryptor.swift`, run via `make decrypt`. It reads
+the key from stdin and writes decrypted plists to `$TMPDIR/com.apple.icloud.searchpartyd/`:
+
+```bash
+cat /tmp/bsk.hex | make decrypt
+```
+
+Then map UUIDs to names from the project venv:
 
 ```bash
 cd /Users/kylecooper/dev/catching-april
 source .venv/bin/activate
 python3 - <<'PY'
-from pathlib import Path
-from findmy.plist import decrypt_plist
-
-key_file = Path.home() / "findmy-key-extractor/keys/LocalStorage.key"
-key = key_file.read_bytes()
-# If extractor writes the key as hex text, swap to:
-#   key = bytes.fromhex(key_file.read_text().strip())
-
-owned = Path.home() / "Library/com.apple.icloud.searchpartyd/OwnedBeacons"
-for f in sorted(owned.glob("*.record")):
-    try:
-        print(f"{f.stem}  ->  {decrypt_plist(f, key).get('name', '(unnamed)')}")
-    except Exception as exc:
-        print(f"{f.stem}  ->  ERROR: {exc}")
+import os, plistlib, glob
+tmp = os.environ["TMPDIR"]
+for f in sorted(glob.glob(f"{tmp}com.apple.icloud.searchpartyd/OwnedBeacons/*.plist")):
+    with open(f, "rb") as fh:
+        d = plistlib.load(fh)
+    print(f"{os.path.basename(f)[:36]}  ->  {d.get('name', '(unnamed)')}")
 PY
 ```
 
 Find the line ending in `-> April` and note its UUID.
 
-**6. Convert that one `.record` to `airtag.json`:**
+**6. Convert April's `.record` to `airtag.json`:**
 
 ```bash
-git clone https://github.com/malmeloo/FindMy.py ~/FindMy.py
-cd ~/FindMy.py && pip3 install -e .
+cd ~/dev
+git clone https://github.com/malmeloo/FindMy.py
+cd FindMy.py && pip3 install -e .
 
 python3 examples/plist_to_json.py \
   ~/Library/com.apple.icloud.searchpartyd/OwnedBeacons/<APRIL-UUID>.record \
   /Users/kylecooper/dev/catching-april/airtag.json \
   --alignment-plist ~/Library/com.apple.icloud.searchpartyd/BeaconNamingRecord/<APRIL-UUID>/*.record \
-  --key-file ~/findmy-key-extractor/keys/LocalStorage.key
+  --key-file /tmp/bsk.hex
 ```
 
 (If `plist_to_json.py --help` shows different flag names, the inputs
