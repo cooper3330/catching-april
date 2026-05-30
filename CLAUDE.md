@@ -34,8 +34,10 @@ Anisette
   Read-only; no auth, no writes. Started via `run_server.sh`, which sources
   `.env` so the LaunchAgent doesn't need secrets baked into its plist.
 - **templates/map.html** — single-page UI. Path / Heatmap / Pings modes, plus
-  a playback scrubber that animates a dot along the day's polyline. Two
-  `{{ google_maps_key }}` placeholders (the JS constant and the script URL).
+  a playback scrubber that animates a dot along the day's polyline and a
+  newest-first check-ins table below the map (tap a row → jumps playback to
+  that point and pans the map). Two `{{ google_maps_key }}` placeholders
+  (the JS constant and the script URL).
 - **Anisette server** — runs as a Docker container (`dadoum/anisette-v3-server`)
   on the same box. `findmy.py` needs it to talk to Apple. We use **Colima**
   (not Docker Desktop) as the Docker runtime — lighter, no GUI required,

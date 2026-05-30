@@ -35,7 +35,61 @@
   }
   button.active { background: var(--accent); color: #1a0f08; border-color: var(--accent); font-weight: 600; }
   #status { margin-left: auto; color: var(--muted); font-size: 12px; }
-  #map { height: calc(100vh - 64px); width: 100%; position: relative; }
+  #map { height: 55vh; width: 100%; position: relative; }
+
+  /* ===== Check-ins table (below map) ===== */
+  #checkins {
+    /* Fills the rest of the viewport below the top bar (64px) + map (55vh). */
+    height: calc(45vh - 64px);
+    overflow-y: auto;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+  #checkins .header {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--panel);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 10px;
+    font-size: 13px; color: var(--muted);
+  }
+  #checkins .header strong { color: var(--ink); font-size: 14px; }
+  #checkins table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  #checkins thead th {
+    position: sticky; top: 41px; z-index: 1;
+    background: var(--panel);
+    color: var(--muted);
+    text-align: left;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  #checkins tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1c2029;
+    font-variant-numeric: tabular-nums;
+  }
+  #checkins tbody tr {
+    cursor: pointer;
+    transition: background .12s;
+  }
+  #checkins tbody tr:hover { background: #1a1e26; }
+  #checkins tbody tr.active {
+    background: rgba(255, 122, 74, 0.12);
+    border-left: 3px solid var(--accent);
+  }
+  #checkins tbody tr.active td:first-child { padding-left: 11px; }
+  #checkins .empty {
+    padding: 24px 14px;
+    color: var(--muted);
+    text-align: center;
+    font-size: 13px;
+  }
+  #checkins .coords { color: var(--muted); font-size: 11px; }
 
   /* ===== Playback bar (floats over map) ===== */
   .playback {
@@ -97,6 +151,26 @@
     <span id="status">—</span>
   </div>
   <div id="map"></div>
+  <section id="checkins">
+    <div class="header">
+      <strong>Check-ins</strong>
+      <span id="checkinsCount">—</span>
+      <span style="margin-left:auto;">newest first</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Accuracy</th>
+          <th>Coordinates</th>
+        </tr>
+      </thead>
+      <tbody id="checkinsBody"></tbody>
+    </table>
+    <div id="checkinsEmpty" class="empty" style="display:none;">
+      No check-ins in this window.
+    </div>
+  </section>
   <div id="playback" class="playback hidden">
     <button id="btnPlay" class="play" title="Play / pause">▶</button>
     <div class="scrub">
@@ -149,6 +223,57 @@
     stopPlay();
   }
 
+  // Render the check-ins table in reverse-chronological order (newest first).
+  // Row index attribute stores the position in currentPath (which is ordered
+  // oldest → newest), so we can map clicks back to setPlaybackIndex.
+  function renderCheckins(path){
+    const tbody = document.getElementById("checkinsBody");
+    const empty = document.getElementById("checkinsEmpty");
+    const count = document.getElementById("checkinsCount");
+    tbody.innerHTML = "";
+    if (!path.length) {
+      empty.style.display = "block";
+      count.textContent = "0 in window";
+      return;
+    }
+    empty.style.display = "none";
+    count.textContent = `${path.length} in window`;
+
+    const frag = document.createDocumentFragment();
+    // Iterate newest → oldest while keeping the original currentPath index
+    // (path is ordered oldest → newest) so row clicks line up with playback.
+    for (let i = path.length - 1; i >= 0; i--) {
+      const p = path[i];
+      const tr = document.createElement("tr");
+      tr.dataset.idx = i;
+      tr.innerHTML =
+        `<td>${new Date(p.ts).toLocaleString()}</td>` +
+        `<td>±${Math.round(p.acc || 0)}m</td>` +
+        `<td class="coords">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</td>`;
+      tr.addEventListener("click", () => {
+        stopPlay();
+        setPlaybackIndex(i);
+        // Pan the map to the selected point without zooming out
+        if (map) map.panTo({ lat: p.lat, lng: p.lng });
+      });
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+  }
+
+  // Move the .active highlight on the table when the playback index changes,
+  // and scroll the row into view if it isn't already visible.
+  function highlightCheckinRow(idx){
+    const tbody = document.getElementById("checkinsBody");
+    const prev = tbody.querySelector("tr.active");
+    if (prev) prev.classList.remove("active");
+    const row = tbody.querySelector(`tr[data-idx="${idx}"]`);
+    if (row) {
+      row.classList.add("active");
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
   async function load(){
     const startEl = document.getElementById("start");
     const endEl   = document.getElementById("end");
@@ -163,10 +288,16 @@
 
     clearOverlays();
     const panel = document.getElementById("playback");
-    if (!points.length) { panel.classList.add("hidden"); return; }
+    if (!points.length) {
+      panel.classList.add("hidden");
+      currentPath = [];
+      renderCheckins([]);
+      return;
+    }
 
     const path = points.map(p => ({ lat: p.lat, lng: p.lon, ts: p.ts, acc: p.accuracy_m }));
     currentPath = path;
+    renderCheckins(path);
 
     if (mode === "path") {
       polyline = new google.maps.Polyline({
@@ -236,6 +367,8 @@
 
     document.getElementById("curTs").textContent  = new Date(p.ts).toLocaleString();
     document.getElementById("curIdx").textContent = `${playIdx + 1} / ${currentPath.length}`;
+
+    highlightCheckinRow(playIdx);
   }
 
   function startPlay(){
