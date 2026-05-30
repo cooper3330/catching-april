@@ -295,16 +295,28 @@ docker run -d --restart always --name anisette \
   -p 6969:6969 dadoum/anisette-v3-server
 ```
 
-## 4. Configure & run the poller
+## 4. Configure credentials and do the one-time login
 
 ```bash
-cp .env.example .env                 # then edit .env with real creds
+cp .env.example .env                 # then edit .env with real Apple creds
 set -a; source .env; set +a          # export the vars into this shell
-python poller.py                     # uses the venv from step 1
-# first run will prompt for a 2FA code; session cached to account.json
+python login.py                      # interactive 2FA, caches account.json
 ```
 
-Leave it running. It writes to `tracks.db` every 2 minutes.
+`login.py` logs in, prompts for a 2FA code (any trusted device or SMS),
+and writes `account.json` next to it. `poller.py` then restores that
+session on every start — no further 2FA needed unless Apple invalidates it.
+
+## 5. Run the poller
+
+```bash
+set -a; source .env; set +a          # if not already exported
+python poller.py
+```
+
+Writes to `tracks.db` every 2 minutes (`POLL_SECONDS`).
+
+Leave it running.
 
 ### Run it as a service
 
@@ -341,7 +353,7 @@ sudo systemctl enable --now catchingapril
 journalctl -u catchingapril -f
 ```
 
-## 5. Run the web app
+## 6. Run the web app
 
 ```bash
 python server.py
@@ -357,7 +369,7 @@ port-forward `5000`.
 Paste your Google Maps key into `map.html` (two places: the `GOOGLE_MAPS_KEY` constant
 **and** the `<script src=…>` URL near the bottom).
 
-## 6. Cat-specific notes
+## 7. Cat-specific notes
 
 - **Breakaway collar only.** Non-negotiable for outdoor cats.
 - The AirTag updates only when a passing iPhone reports it — expect 1–5 min gaps in busy
@@ -367,7 +379,7 @@ Paste your Google Maps key into `map.html` (two places: the `GOOGLE_MAPS_KEY` co
   iPhones with an "AirTag found moving with you" alert. Neighbors may see it.
 - Battery (CR2032) lasts ~12 months. Drop a Calendar reminder.
 
-## 7. Where to grow this
+## 8. Where to grow this
 
 - **Geofence alerts**: trigger a push notification (e.g. via ntfy.sh) when she crosses
   outside a polygon around the yard.
