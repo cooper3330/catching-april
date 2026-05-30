@@ -28,10 +28,14 @@ Anisette
 - **tracks.db** — SQLite. Single table `locations(id, ts, lat, lon, accuracy_m, status)`
   with a UNIQUE constraint on `(ts, lat, lon)` for dedupe and an index on `ts`.
   Timestamps are ISO 8601 UTC strings.
-- **server.py** — Flask. Serves `map.html` at `/`, exposes `/api/locations?start=&end=`
-  (defaults to last 24h) and `/api/days`. Read-only; no auth, no writes.
-- **map.html** — single-page UI. Path / Heatmap / Pings modes, plus a playback
-  scrubber that animates a dot along the day's polyline.
+- **server.py** — Flask. Renders `templates/map.html` at `/` (Jinja-injecting
+  the Google Maps key from `GOOGLE_MAPS_KEY` env var), exposes
+  `/api/locations?start=&end=` (defaults to last 24h) and `/api/days`.
+  Read-only; no auth, no writes. Started via `run_server.sh`, which sources
+  `.env` so the LaunchAgent doesn't need secrets baked into its plist.
+- **templates/map.html** — single-page UI. Path / Heatmap / Pings modes, plus
+  a playback scrubber that animates a dot along the day's polyline. Two
+  `{{ google_maps_key }}` placeholders (the JS constant and the script URL).
 - **Anisette server** — runs as a Docker container (`dadoum/anisette-v3-server`)
   on the same box. `findmy.py` needs it to talk to Apple. We use **Colima**
   (not Docker Desktop) as the Docker runtime — lighter, no GUI required,
@@ -148,12 +152,14 @@ If they disagree, fix them both before moving on.
 - Timestamps are ISO 8601 UTC strings in the DB.
 
 **Frontend**
-- Vanilla JS, no build step, no framework. One HTML file.
+- Vanilla JS, no build step, no framework. One HTML file (a Jinja template).
 - Dark theme via CSS custom properties on `:root`; the cat's trail is
   `--accent: #ff7a4a` (warm orange) everywhere.
 - Google Maps JS API with the `visualization` library (for the heatmap).
-  The key appears in **two places** in `map.html`: the `GOOGLE_MAPS_KEY`
-  constant and the `<script src=…>` URL near the bottom. Keep them in sync.
+  The key is injected by `server.py` from the `GOOGLE_MAPS_KEY` env var into
+  two `{{ google_maps_key }}` placeholders in `templates/map.html` (the
+  `GOOGLE_MAPS_KEY` constant and the `<script src=…>` URL). Adding a new
+  spot? Put `{{ google_maps_key }}` there too.
 
 **Data & privacy**
 - `airtag.json`, `account.json`, `tracks.db`, and `.env` are secrets / PII.

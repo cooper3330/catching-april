@@ -17,11 +17,12 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, render_template, request
 
-DB_PATH = Path("tracks.db")
-APP_DIR = Path(__file__).parent
-PORT    = int(os.environ.get("PORT", "5001"))
+DB_PATH          = Path("tracks.db")
+APP_DIR          = Path(__file__).parent
+PORT             = int(os.environ.get("PORT", "5001"))
+GOOGLE_MAPS_KEY  = os.environ.get("GOOGLE_MAPS_KEY", "")
 
 app = Flask(__name__)
 
@@ -40,7 +41,7 @@ def query(start_iso: str, end_iso: str):
 
 @app.route("/")
 def index():
-    return send_from_directory(APP_DIR, "map.html")
+    return render_template("map.html", google_maps_key=GOOGLE_MAPS_KEY)
 
 
 @app.route("/api/locations")

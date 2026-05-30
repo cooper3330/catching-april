@@ -118,8 +118,8 @@
 
 <script>
   // ===== CONFIG =====
-  // Replace with your Google Maps JS API key (Maps JavaScript API + enable Visualization).
-  const GOOGLE_MAPS_KEY = "YOUR_API_KEY_HERE";
+  // Injected by server.py via Jinja from the GOOGLE_MAPS_KEY env var.
+  const GOOGLE_MAPS_KEY = "{{ google_maps_key }}";
   // Default centre — 902 Banklick St, Covington KY area
   const HOME = { lat: 39.0853, lng: -84.5085 };
 
@@ -307,6 +307,6 @@
   }
 </script>
 <script async
-  src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=visualization&callback=initMap"></script>
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_key }}&libraries=visualization&callback=initMap"></script>
 </body>
 </html>

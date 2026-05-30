@@ -13,10 +13,14 @@
   <key>Label</key>
   <string>com.catchingapril.server</string>
 
+  <!--
+    Invoked via run_server.sh (not python directly) so the wrapper can
+    source .env. Keeps secrets like GOOGLE_MAPS_KEY in .env instead of
+    embedding them in this plist after install.
+  -->
   <key>ProgramArguments</key>
   <array>
-    <string>__USER_HOME__/dev/catching-april/.venv/bin/python</string>
-    <string>__USER_HOME__/dev/catching-april/server.py</string>
+    <string>__USER_HOME__/dev/catching-april/run_server.sh</string>
   </array>
 
   <key>WorkingDirectory</key>

@@ -4,7 +4,7 @@ Tiny system that polls April's AirTag through Apple's Find My network, stores lo
 reports in SQLite, and renders her daily trail on Google Maps.
 
 ```
-poller.py  ──►  tracks.db  ──►  server.py  ──►  map.html
+poller.py  ──►  tracks.db  ──►  server.py  ──►  templates/map.html
 ```
 
 ---
@@ -396,23 +396,34 @@ journalctl -u catchingapril -f
 
 ## 7. Run the web app
 
+Set your Google Maps JS API key in `.env`:
+
 ```bash
-python server.py
+# In .env
+GOOGLE_MAPS_KEY=AIza...
+```
+
+Get the key from https://console.cloud.google.com/ (enable **Maps JavaScript
+API**, restrict by HTTP referrer to `http://localhost:5001/*` and your
+Tailscale hostname). `server.py` reads `GOOGLE_MAPS_KEY` at startup and
+renders `templates/map.html` via Jinja, injecting the key in both spots
+(the `GOOGLE_MAPS_KEY` JS constant and the `<script src=…>` URL).
+
+Run it:
+
+```bash
+./run_server.sh                                # sources .env, then `python server.py`
 # open http://localhost:5001 on the Mac mini
 # or http://<mac-mini-tailnet-name>:5001 from your phone over Tailscale
 ```
 
 > Port defaults to **5001** because macOS uses :5000 for AirPlay Receiver.
-> Override with `PORT=8080 python server.py` if you'd rather use something
-> else. The LaunchAgent in `launchd/` doesn't set PORT, so it uses 5001.
+> Override with `PORT=8080 ./run_server.sh` (or set `PORT=` in `.env`).
 
 The Flask app has **no authentication** and shouldn't be exposed to the public
 internet. Hosting plan is **Tailscale only** — install the tailnet on the Mac
 mini and on your phone, then hit the tailnet hostname from anywhere. Don't
-port-forward `5000`.
-
-Paste your Google Maps key into `map.html` (two places: the `GOOGLE_MAPS_KEY` constant
-**and** the `<script src=…>` URL near the bottom).
+port-forward `5001`.
 
 ## 8. Cat-specific notes
 
