@@ -216,23 +216,50 @@ PY
 
 Find the line ending in `-> April` and note its UUID.
 
-**6. Convert April's `.record` to `airtag.json`:**
+**6. Convert April's decrypted plist to `airtag.json`.** `plist_to_json.py`
+takes the **already-decrypted** `.plist` files written by `make decrypt`
+into `$TMPDIR/com.apple.icloud.searchpartyd/`. Its real signature is
+`<accessory_plist> <output> [--alignment-plist <path>]` — no `--key-file`,
+and alignment data lives in `KeyAlignmentRecords/`, not `BeaconNamingRecord/`.
 
 ```bash
 cd ~/dev
 git clone https://github.com/malmeloo/FindMy.py
 cd FindMy.py && pip3 install -e .
-
-python3 examples/plist_to_json.py \
-  ~/Library/com.apple.icloud.searchpartyd/OwnedBeacons/<APRIL-UUID>.record \
-  /Users/kylecooper/dev/catching-april/airtag.json \
-  --alignment-plist ~/Library/com.apple.icloud.searchpartyd/BeaconNamingRecord/<APRIL-UUID>/*.record \
-  --key-file /tmp/bsk.hex
 ```
 
-(If `plist_to_json.py --help` shows different flag names, the inputs
-are still: the `.record`, the output path, the matching naming
-`.record`, and the key file.)
+Check whether April has a KeyAlignmentRecord (some accessories don't):
+
+```bash
+ls "$TMPDIR/com.apple.icloud.searchpartyd/KeyAlignmentRecords/<APRIL-UUID>/" 2>/dev/null
+```
+
+If you see one or more `.plist` files there, run:
+
+```bash
+python3 examples/plist_to_json.py \
+  "$TMPDIR/com.apple.icloud.searchpartyd/OwnedBeacons/<APRIL-UUID>.plist" \
+  /Users/kylecooper/dev/catching-april/airtag.json \
+  --alignment-plist "$TMPDIR/com.apple.icloud.searchpartyd/KeyAlignmentRecords/<APRIL-UUID>/<ALIGNMENT-UUID>.plist"
+```
+
+If she doesn't have one (directory empty / missing), drop the flag —
+findmy logs a warning and the poller will resync key alignment from
+Apple's servers on first fetch:
+
+```bash
+python3 examples/plist_to_json.py \
+  "$TMPDIR/com.apple.icloud.searchpartyd/OwnedBeacons/<APRIL-UUID>.plist" \
+  /Users/kylecooper/dev/catching-april/airtag.json
+```
+
+> **If you lose the decrypted files later** (macOS clears `$TMPDIR` on
+> reboot / periodic cleanup) but you still have the hex key saved
+> somewhere safe: re-running `make decrypt` does **not** require SIP or
+> AMFI off — it's just AES-GCM with a known key against
+> `~/Library/com.apple.icloud.searchpartyd/`, which you own. Save the
+> hex key to a password manager or USB stick, and you can re-decrypt
+> any time without another reboot dance.
 
 **7. Revert security:**
 
