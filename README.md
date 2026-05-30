@@ -414,8 +414,16 @@ Run it:
 ```bash
 ./run_server.sh                                # sources .env, then `python server.py`
 # open http://localhost:5001 on the Mac mini
-# or http://<mac-mini-tailnet-name>:5001 from your phone over Tailscale
+# or http://kyles-mac-mini.tailc6d656.ts.net:5001 from your phone over Tailscale
 ```
+
+The Tailscale URL above is the live one for this deployment — `kyles-mac-mini`
+is the device hostname, `tailc6d656.ts.net` is the auto-assigned tailnet
+suffix. To make it prettier, re-roll suggestions at
+https://login.tailscale.com/admin/dns ("Rename tailnet"); Tailscale only
+offers `<word>-<word>.ts.net` suggestions on free/paid plans, no custom
+names. If you rename, update the Google Maps API key referrers and this
+README to match.
 
 > Port defaults to **5001** because macOS uses :5000 for AirPlay Receiver.
 > Override with `PORT=8080 ./run_server.sh` (or set `PORT=` in `.env`).

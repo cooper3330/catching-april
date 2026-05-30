@@ -116,8 +116,12 @@ key.
 ## Hosting plan: Tailscale, not public internet
 
 `server.py` binds `0.0.0.0:5000` and has **no authentication**. The plan is to
-expose it only over **Tailscale** — install the tailnet on the Pi and on the
-phone, then hit `http://<pi-tailnet-name>:5000` from anywhere.
+expose it only over **Tailscale** — install the tailnet on the Mac mini and
+on the phone, then hit `http://kyles-mac-mini.tailc6d656.ts.net:5001` from
+anywhere. `tailc6d656.ts.net` is the auto-assigned tailnet suffix; Tailscale
+free/paid plans only allow re-rolling to `<word>-<word>.ts.net` suggestions,
+no custom names. If the suffix changes, update README and the Google Maps
+API key HTTP-referrer list to match.
 
 Do not port-forward `5000` or stick this behind a public reverse proxy without
 adding auth first. Cat location history is sensitive and the API is wide open.
