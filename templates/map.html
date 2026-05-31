@@ -138,9 +138,10 @@
     overflow-y: auto;
     background: var(--bg);
     border-top: 1px solid var(--border);
-    /* Padding for iPhone home indicator so the last row isn't under it.
-       The playback bar (when visible) overlays the bottom anyway. */
-    padding-bottom: env(safe-area-inset-bottom);
+    /* Reserve room for the floating playback bar so the last rows can scroll
+       out from under it. ~78px = bar height + bottom margin; the safe-area
+       inset handles the iPhone home indicator on top of that. */
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
   }
   #checkins .header {
     position: sticky; top: 0; z-index: 2;
@@ -234,6 +235,19 @@
   .playback select.speed {
     background: #11141a; color: var(--ink); border: 1px solid var(--border);
     border-radius: 8px; padding: 6px 8px; font-size: 12px; flex-shrink: 0;
+  }
+
+  /* On phones, tighten the playback bar so the speed selector fits.
+     Compact time text (set in JS — just "3:42 PM") + smaller play button
+     + smaller select keeps everything on one row. */
+  @media (max-width: 640px) {
+    .playback { gap: 8px; padding: 8px 10px; }
+    .playback .play {
+      width: 34px; height: 34px; font-size: 13px;
+    }
+    .playback .time .ts  { font-size: 12px; }
+    .playback .time .idx { font-size: 10px; }
+    .playback select.speed { padding: 4px 6px; font-size: 11px; }
   }
 </style>
 </head>
@@ -481,7 +495,10 @@
     scrubber.style.setProperty("--progress", pct + "%");
     scrubber.style.backgroundSize = pct + "% 100%";
 
-    document.getElementById("curTs").textContent  = new Date(p.ts).toLocaleString();
+    // Compact time-only in the playback bar (full datetime is in the active
+    // check-ins row already). Keeps the bar from overflowing on phones.
+    document.getElementById("curTs").textContent  =
+      new Date(p.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     document.getElementById("curIdx").textContent = `${playIdx + 1} / ${currentPath.length}`;
 
     highlightCheckinRow(playIdx);
@@ -518,14 +535,28 @@
   }
 
   // Apply a time-window preset chip.
-  // 'custom' just reveals the datetime pickers + Update button without firing
-  // a load() — the user edits the range then clicks Update. Other presets
-  // populate the hidden inputs and reload immediately.
+  //   - Preset (1h/6h/24h/today): activates chip, populates hidden inputs,
+  //     reloads.
+  //   - 'custom' first click: activates chip, reveals datetime pickers +
+  //     Update button. Doesn't reload until the user clicks Update.
+  //   - 'custom' re-click while already active: collapses the picker without
+  //     touching the loaded data (so users can hide the picker after applying
+  //     a custom range). The chip becomes inactive but the map keeps the
+  //     last-loaded data.
   function setPreset(key){
+    const customRow  = document.getElementById("customRange");
+    const customChip = document.querySelector('.chip[data-preset="custom"]');
+
+    if (key === "custom" && customChip.classList.contains("active")) {
+      customChip.classList.remove("active");
+      customRow.hidden = true;
+      return;
+    }
+
     for (const c of document.querySelectorAll(".chip")) {
       c.classList.toggle("active", c.dataset.preset === key);
     }
-    const customRow = document.getElementById("customRange");
+
     if (key === "custom") { customRow.hidden = false; return; }
     customRow.hidden = true;
 
