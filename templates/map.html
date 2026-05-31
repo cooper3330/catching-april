@@ -261,8 +261,11 @@
     tbody.appendChild(frag);
   }
 
-  // Move the .active highlight on the table when the playback index changes,
-  // and scroll the row into view if it isn't already visible.
+  // Move the .active highlight on the table when the playback index changes.
+  // Only scroll into view when transitioning from a previous active row (i.e.,
+  // user is actively scrubbing/playing). Skip on initial render so the table
+  // stays at the top showing the newest entries — otherwise auto-set to index
+  // 0 (oldest, drawn at the bottom of the table) would scroll us to the bottom.
   function highlightCheckinRow(idx){
     const tbody = document.getElementById("checkinsBody");
     const prev = tbody.querySelector("tr.active");
@@ -270,7 +273,7 @@
     const row = tbody.querySelector(`tr[data-idx="${idx}"]`);
     if (row) {
       row.classList.add("active");
-      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      if (prev) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   }
 
